@@ -1,11 +1,11 @@
 ## devtools::install_github("rformassspectrometry/MsBackendMsp")
+## devtools::install_github("sneumann/MsBackendMS")
 library(Spectra)
 library(MsCoreUtils)
 library(MsBackendMS)
+library(MsBackendMsp)
 library(metfRag)
 library(IRanges)
-
-#source("functions-ms.R")
 
 setwd("/home/sneumann/src/weizfrag")
 be <- MsBackendMS()
@@ -28,16 +28,12 @@ inchi <- metadata[, "InChI"]
 inchikey <- metadata[, "InChiKey"]
 smiles <- metadata[, "Smiles"]
 
-
-
-#ms <- lapply(filename, readMS)
+## Read actual SIRIUS input files
 ms <- backendInitialize(be, filename)
 
-
-
+## Calculate Fingerprints for MetFrag
 options(java.parameters = c("-Xms512m", "-Xmx1024m"))
 library(rcdk)
-# library(fingerprint)
 sp <- get.smiles.parser()
 
 fps <- sapply(smiles, function(s) {
@@ -78,6 +74,8 @@ for (i in seq(1, length(ms))[smilesOK & inchikeyOK]) {
 }
 sink(NULL)
 
+## Try to write *.MSP files
+export(Spectra(ms), backend = MsBackendMsp(), file = "/tmp/WeizMassV2.msp")
 
 ## Create CSV with InChiKey and Fingerprint
 ## egrep 'InChIKey|MolecularFingerPrint' MoNA-export-LC-MS-MS_Spectra.mb | cut -d"=" -f 2 | paste -s -d' \n' | sort | uniq  >new.mb.fp 
