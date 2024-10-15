@@ -11,17 +11,21 @@ library(metfRag)
 #fls <- dir(system.file("extdata", package = "MsBackendMsp"),
 #           full.names = TRUE, pattern = "msp$")
 #fls <- "/home/sneumann/src/MetFragRelaunched/MetFragLib/src/main/resources/MoNA-export-LC-MS.mb"
-fls <- "/media/MoNA-export-LC-MS-MS_Spectra.msp"
+fls <- "/tmp/MoNA-export-LC-MS-MS_Spectra-20241014.msp"
+#fls <- "/media/MoNA-export-LC-MS-MS_Spectra.msp"
 #fls <- "/media/MoNA-export-LC-MS-MS_Spectra-half.msp"
 #fls <- "/media/MoNA-export-LC-MS-MS_Spectra-200.mb"
 #fls <- "/tmp/head-MoNA-export-LC-MS-MS_Spectra.msp"
 
 if (TRUE) {
   ## Import a single file.
+  # register(SerialParam())
+  register(MulticoreParam(4))
   sps <- Spectra(fls[1], source = MsBackendMsp())
   save(sps, file="/tmp/sps.rdata")
 } else {
-  load("/tmp/sps.rdata")
+  #load("/tmp/sps.rdata")
+  load("/tmp/MoNA-export-LC-MS-MS_Spectra-20221217.rdata")
 }
 
 ## Filter all Peaks relative intensity < 0.005
@@ -42,6 +46,14 @@ inchikey <- spectraData(sps, columns = "InChIKey")[,1]
 ion_mode <- spectraData(sps, columns = "Ion_mode")[,1]
 comments <- spectraData(sps, columns = "Comments")[,1]
 
+## Filter any spectra without InChIKey, ion_mode or comments
+hasNA <- is.na(inchikey) | is.na(ion_mode) | is.na(comments)
+sps <- sps[!hasNA]
+
+inchikey <- spectraData(sps, columns = "InChIKey")[,1]
+ion_mode <- spectraData(sps, columns = "Ion_mode")[,1]
+comments <- spectraData(sps, columns = "Comments")[,1]
+ 
 computed <- as.data.frame(t(sapply(comments, function(com) {
   entries <- scan(text=com, what="character", quiet = TRUE)
   compsmiles <- sub("^computed SMILES=(.*)$", "\\1", grep("^computed SMILES=", entries, value=TRUE))
@@ -75,15 +87,29 @@ fps <- sapply(computed[,"compsmiles"], function(s) {
 })
 
 smilesOK <- sapply (fps, function(f) f!="")
-len <-  length(which((smilesOK==TRUE)))
 table(smilesOK)
 
 spd <- spectraData(sps, c("Name", "PrecursorMZ"))
+hasPrecursor <- !is.na(spd[, "PrecursorMZ"])
+table(hasPrecursor)
+
+## Fix comma/dot issue in PrecursorMZ
+spd[, "PrecursorMZ"] <- gsub(",", ".", spd[, "PrecursorMZ"])
 
 peakLists <- peaksData(sps)
 
-sink("/tmp/MoNA-export-LC-MS-MS_Spectra-0.005.mb")
-for (i in seq(1, length(sps))[smilesOK & !is.na(spd[, "PrecursorMZ"]) ]) {
+
+stopifnot(   length(smilesOK)   == length(hasPrecursor) 
+             && length(smilesOK)   == length(sps)
+             && length(smilesOK)   == length(peakLists)
+             && length(smilesOK)   == nrow(spd) )
+
+len <-  length(which(smilesOK==TRUE & hasPrecursor==TRUE))
+               
+
+
+sink("/tmp/MoNA-export-LC-MS-MS_Spectra-20241014-0.005.mb")
+for (i in seq(1, length(sps))[smilesOK & hasPrecursor ]) {
   if ( (i/len*100)%% 10 == 0) {
     message(i/len*100, "%")
   }
